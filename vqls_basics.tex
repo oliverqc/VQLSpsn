@@ -1,0 +1,80 @@
+\documentclass[12pt, oneside]{book}
+
+% --- PACKAGES ---
+\usepackage{amsmath}       % Math equations
+\usepackage{xcolor}        % Colored text
+\usepackage{tcolorbox}     % Boxed text/equations
+\usepackage{tikz}          % Drawing and image overlays
+\usepackage{graphicx}      % Images
+\usepackage[colorlinks=true, linkcolor=blue]{hyperref} % Interactive PDF links
+\usepackage{parskip}
+
+\begin{document}
+
+% --- TITLE PAGE ---
+\begin{titlepage}
+    \centering
+    
+    \vspace*{3cm} 
+    
+    {\Huge \textbf{VQLS Basics}\par}
+    
+    \vspace*{3cm} 
+
+    \includegraphics[width=1.1\textwidth]{VQLSpsn_diagrams/VQLS_diagram.png}\par
+
+    \vfill
+    
+    {\small Oliver Jackson\par}
+    
+    \vspace*{0.5cm} 
+
+    {\small \today\par}
+\end{titlepage}
+
+% --- TABLE OF CONTENTS ---
+\tableofcontents
+
+\chapter{Introduction}
+
+  This document covers variational quantum linear system algorithms where the goal 
+is to take a sparse matrix $A$ and a vector $\mathbf{b}$, and prepare a quantum 
+state $|x\rangle$ that is proportional to $A^{-1}|b\rangle$.
+
+  I hope the reader is familiar with undergraduate linear algebra, systems of 
+equations, and can grasp general quantum mechanics concepts. For those with a 
+programming background and not physics, only a handful of simple concepts from 
+quantum mechanics are required. Including dirac notation, expectation values, 
+and general grasp of laws of superposition and entanglement. Even so, I would 
+encourage the inexperienced reader to dive into the document. I have provided 
+lots of diagrams, equations, and graphs to help aid the learning process. 
+
+  Note if your goal is to achieve a "quantum advantage" by solving the Poisson 
+problem using a VQLS then this project is not for you. In the end, this project 
+amounts classically to a small to medium sized matrix multiplication which 
+can be handled by your smart phone in a matter of milliseconds to seconds. 
+A true advantage may be proposed for quantum systems in which a classical 
+computer cannot handle naturally. However, I am interested in solving PDEs 
+right now on noisy quantum hardware. So my research is more concerned with 
+improving the scalability and runtime issues of VQLS. 
+
+\chapter{What is VQLS?}
+
+\section{VQLS as a type of VQA}
+\section{What are the goals of this project?}
+
+  
+
+\chapter{The variational principle}
+
+\chapter{The heart of the VQLS: the parameterized quantum circuit}
+
+\chapter{Building a VQLS}
+\section{Constructing the operators}
+\section{Choosing an ansatz ansatz}
+\section{Building the cost function}
+\section{Choosing an optimizer}
+
+\chapter{The readout problem to be continued}
+
+\end{document}
