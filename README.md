@@ -1,6 +1,8 @@
 # Intro
 This project solves the 2D Poisson equation on IBM quantum hardware using a variational quantum linear solver (VQLS). The goal of this repository is to provide reproducable and understandable code so that quantum computing beginners can solve their own PDEs using qiskit motions. This project contains work I completed in both my personal research in the Civil Eng department at MST and the QIC 2026 summer internship at Mizzou.
 
+<img width="1877" height="1067" alt="VQLS_diagram" src="https://github.com/user-attachments/assets/93c323d7-551d-41e5-a904-0d12ce5675a4" />
+
 # Learning
 Learn the basics behind how the quantum computing community approaches solivng a linear system of equations on quantum hardware. I discuss how a VQLS is built on a basic level and why I chose the VQLS amidst the many other quantum algorithm choices in `FundamentalVQLS.pdf`. Finally, I mention what I believe to be the most promising approaches for the future of solving PDEs on quantum hardware.
 
