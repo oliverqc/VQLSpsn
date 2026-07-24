@@ -8,10 +8,12 @@
 \usepackage{graphicx}      % Images
 \usepackage[colorlinks=true, linkcolor=blue]{hyperref} % Interactive PDF links
 \usepackage{parskip}
+\usepackage[T1]{fontenc}
+\usepackage{amssymb}
 
 \begin{document}
 
-% --- TITLE PAGE ---
+\pagenumbering{roman}
 \begin{titlepage}
     \centering
     
@@ -21,8 +23,22 @@
     
     \vspace*{3cm} 
 
-    \includegraphics[width=1.1\textwidth]{VQLSpsn_diagrams/VQLS_diagram.png}\par
-
+    \begin{center}
+      \hypertarget{maindiagram}{}
+      \begin{tikzpicture}
+          \node[anchor=south west,inner sep=0] (image) at (0,0) {\includegraphics[width=1.1\textwidth]{VQLSpsn_diagrams/full_diagram_VQLS.png}};
+          \begin{scope}[x={(image.south east)}, y={(image.north west)}]
+              % PDE Block
+            \node at (0.31, 0.80) {\hyperlink{sec:pde}{\phantom{\rule{4cm}{3.10cm}}}};
+              % Ansatz Block
+              \node at (0.22, 0.44) {\hyperlink{sec:ansatz}{\phantom{\rule{6.35cm}{2.4cm}}}};
+              % Cost Function Block
+              \node at (0.83, 0.64) {\hyperlink{sec:cost}{\phantom{\rule{4.3cm}{1.8cm}}}};
+              % Optimizer Block
+              \node at (0.83, 0.2) {\hyperlink{sec:optimizer}{\phantom{\rule{3.6cm}{2.1cm}}}};
+          \end{scope}
+      \end{tikzpicture}
+    \end{center}
     \vfill
     
     {\small Oliver Jackson\par}
@@ -32,48 +48,411 @@
     {\small \today\par}
 \end{titlepage}
 
-% --- TABLE OF CONTENTS ---
+
 \tableofcontents
+
+\cleardoublepage
+\pagenumbering{arabic}
 
 \chapter{Introduction}
 
-  This document covers variational quantum linear system algorithms where the goal 
+This document covers variational quantum linear system (VQLS) algorithms where the goal 
 is to take a sparse matrix $A$ and a vector $\mathbf{b}$, and prepare a quantum 
 state $|x\rangle$ that is proportional to $A^{-1}|b\rangle$.
 
-  I hope the reader is familiar with undergraduate linear algebra, systems of 
-equations, and can grasp general quantum mechanics concepts. For those with a 
-programming background and not physics, only a handful of simple concepts from 
-quantum mechanics are required. Including dirac notation, expectation values, 
-and general grasp of laws of superposition and entanglement. Even so, I would 
-encourage the inexperienced reader to dive into the document. I have provided 
-lots of diagrams, equations, and graphs to help aid the learning process. 
+I hope the reader is familiar with undergraduate linear algebra, systems of 
+equations, dirac notation, expectation values, and normalization. Even so, 
+I would encourage the inexperienced reader to dive into the document. I have 
+provided lots of diagrams, equations, and graphs to help aid the learning process. 
 
-  Note if your goal is to achieve a "quantum advantage" by solving the Poisson 
+Note if your goal is to see a "quantum advantage" by solving the Poisson 
 problem using a VQLS then this project is not for you. In the end, this project 
 amounts classically to a small to medium sized matrix multiplication which 
 can be handled by your smart phone in a matter of milliseconds to seconds. 
-A true advantage may be proposed for quantum systems in which a classical 
+A true advantage may be proposed for quantum systems or large system sizes in which a classical 
 computer cannot handle naturally. However, I am interested in solving PDEs 
 right now on noisy quantum hardware. So my research is more concerned with 
 improving the scalability and runtime issues of VQLS. 
 
-\chapter{What is VQLS?}
+This document was heavily inspired by "Introduction to Variational Quantum 
+Algorithms" by Michał Stęchły and "Variational quantum algorithms" by Marco Cerezo et al. 
+Michał Stęchły provides an easily digestible non-mathematical introduction to VQA's which 
+can give a great base for those coming from non-physics backgrounds. Cerezo's paper 
+is one of the original publications on VQA's and provides a comphrehensive overview on the algorithms
+and their variations. This document is not a replacement for those two papers but rather a supplement to them 
+for those specifically interested in solving PDEs with VQLS. I delve much further into each 
+component of the algorithm introducing both the concept and the application. 
+\chapter{What are variational quantum linear solvers?}
 
-\section{VQLS as a type of VQA}
-\section{What are the goals of this project?}
+The VQLS is a hybrid quantum-classical algorithm that uses a parameterized quantum circuit (PQC)
+to iteratively prepare a quantum state $|x\rangle$ that is proportional to $A^{-1}|b\rangle$. 
+To break that down a little bit, VQLS uses both a quantum processing unit (QPU) and a CPU. It also depends on the 
+primitive PQC which for now we can think of as a series of unitary gates of which some depend on 
+parameters $\theta$. To find a solution we apply a PQC to a set of quantum states which prepares a guess for $|x\rangle$.
+We check how much the guess overlaps with the solution and then update the parameters to make a better guess. You can 
+think of VQLS as a quantum analog to classical machine-learning methods like neural networks. That will become 
+more apparent as we go through the document. If this was confusing that is ok. In the following sections I break down
+the definitions and context of each of these concepts. You can refer back to this definition as you read along. 
+\section{Variational quantum algorithms}
 
-  
+VQLS is a type of variational quantum algorithm (VQA) which are an excellent class of algorithms designed to solve problems
+on noisy intermediate scale quantum (NISQ) devices. VQAs account for the major limitations of NISQ poor 
+coherence times and gate errors by utilizing an optimization or learning based approach. They also have a PQC and optimizer 
+but are not limited to solving linear systems of equations. 
 
-\chapter{The variational principle}
+VQAs can be used for a wide variety of problems including optimization, machine learning, and most notibly quantum chemistry. 
+Of course, whether VQAs can actually provide good solutions to problems on quantum hardware is still an open question. 
+The more we research the more we learn about the specific limitations of each application. We are also finding 
+that VQAs are not very capable of solving problems on NISQ devices right now but still have potential to be improved. For example,
+creating ansatz which are problem specific, optimizers which are robust to noise, and cost functions which are less susceptible
+to barren plateaus are all active areas of research. 
 
-\chapter{The heart of the VQLS: the parameterized quantum circuit}
+All of the accessible quantum hardware to date is noisy and has a limited qubit coherence time and we refer to 
+this hardware as NISQ. On IBM's quantum hardware, for example, applying one gate to a qubit introduces an error 
+of about 0.1\% to 1\%. This means that if we apply a series of gates to a qubit, the error compounds quickly and the qubit 
+will lose its quantum state after only a hundred gates. This limits the depth (number of quantum gates applied) of quantum 
+circuits that can be executed on NISQ devices.
+
+So we need an algorithm that can work with shallow circuits. The best known quantum algorithms for solving linear systems 
+are the HHL and QSVT algorithms which use the primitives quantum phase estimation (QPE) and quantum singular value transformation
+(QSVT) respectively. Both of these primitives require deep circuits and are not suitable for NISQ devices which is why
+I have not included them in this project. In interest of seeing if we can solve PDEs on quantum devices today using IBM's 
+hardware we will focus on the VQLS algorithm. 
+
+Ok so VQAs are a class of algorithms for NISQ that can solve many problems. But how do they work? How is a VQA constructed? A 
+I want to give a little intuition on how to answer these questions before reall diving in. VQA can be described using four steps. 
+
+\begin{enumerate}
+  \item Encode the problem 
+  \item Choose the ansatz
+  \item Build the cost function
+  \item Run the optimization loop
+\end{enumerate}
+
+The final step which is hidden is to readout the solution. However, this can be a very difficult step and is not always possible. I will 
+discuss general readout methods and their limitations in the last chapter. Encoding the problem is the first step and is
+when we take our classical problem and encode it into a quantum problem. In a quantum chemistry problem we would 
+encode the Hamiltonian of a molecule into a quantum circuit. In the case of a PDE we can encode a matrix $A$ and vector $b$ 
+containing the discretized PDE into a quantum circuit. 
+
+For example, we can take any general classical problem represented by the 2x2 matrix 
+
+$$
+H = \begin{bmatrix} a & b \\ c & c \\ \end{bmatrix}.
+$$
+
+Unlike classical computers, which can store arbitrary matrices as grids of numbers in memory, quantum computers only 
+recieve instuctions through a well formulated inner product space. So in order to encode this matrix we have to decompose it into a 
+orthonormal basis. The Pauli matrices form an orthonormal basis for 2x2 matrices and consists of the identity matrix and three
+Pauli matrices 
+
+$$
+I = \begin{bmatrix} 1 & 0 \\ 0 & 1 \\ \end{bmatrix}, \quad 
+P_x = \begin{bmatrix} 0 & 1 \\ 1 & 0 \\ \end{bmatrix}, \quad
+P_y = \begin{bmatrix} 0 & -i \\ i & 0 \\ \end{bmatrix}, \quad
+P_z = \begin{bmatrix} 1 & 0 \\ 0 & -1 \\ \end{bmatrix}. \quad
+$$
+
+We could use any orthonormal basis to decompose our matrix into but I have chosen Pauli matrices because they are native to 
+IBMs quantum hardware. We can define a new matrix $H$ that is a linear combination of Pauli matrices.
+
+$$
+H = c_1X + c_2Y + c_3Z + c_4I 
+$$
+
+
+Where the coefficients $c_k$ are determined by the equation $\frac{1}{2} Tr (A \cdot \sigma_k)$. The ansatz is the specific
+architecture you use for your PQC. Mathematically the ansatz is a series of parameterized and unparameterized
+unitary gates applied to a quantum state. And it controls how guesses are made for your solution state. In the PQC section
+and the ansatz section I discuss exactly how the ansatz prepares a guess solution. 
+
+After choosing our ansatz we need define our cost function. The cost function takes in our encoded matrix as well as the ansatz. 
+We define a cost function like in classical machine learning methods to be the discrepancy between our guessed state and our
+target state. The final output of the cost function is a real number between 0 and 1. The core goal of the VQA is to minimize this cost 
+through optimization. The final step is to choose an optimizer type like gradient descenent. 
+
+
+\section{Quantum states}
+Before jumping into the PQC I want to introduce quantum states and the variational principle to give some motivation to 
+the reader on why this algorithm works. Very important. On a classical computer an $n$-bit register lives in a discrete space where each bit can be exactly 
+zero or one. In quantum computing, we take the discrete classical states a system can occupy (such as 00,01,10 or 11), make each one an orthogonal axis, 
+and assign a complex number to each one. A single quantum state is simply a continuous vector pointing somewhere inside this space.
+
+$$
+|\psi\rangle=\sum_{x=0}^{2^n-1} c_x|x\rangle \quad \text{where} \quad|\psi\rangle \in \mathbb{C}^{2^n}
+$$
+
+So now our quantum state which is a vector can be formed with any linear combination of possible states and their corresponding 
+comlex coefficients. As long as the sum of coefficients squared magnitudes is equal to exactly one. This forms a vector space or more specifically 
+an inner product space commonly referred to as the Hilbert space. Therefore, you can mathematically encode $2^n$ classical data points 
+into the coefficients of a single $n$-qubit quantum state. Confirm that this makes sense for yourself. 
+
+If a quantum state is a vector pointing somewhere in a continuous complex space, then a quantum logic gate is simply a mathematical 
+operation that rotates or transforms that vector. It is a unitary transformation which means it preserves the inner
+product (the length) of the state vector. This ensures the total probability of all possible outcomes remains exactly one. 
+A transformation is unitary if its conjugate transpose times itself returns the identity matrix 
+
+$$
+U^{\dagger} U = I
+$$
+
+So a quantum gate can be mathematically represented as a unitary transformation matrix. Let's take the example of an $X$ gate
+being applied to one qubit in the zero state. The $X$ gate is represented by the Pauli $x$ matrix and it takes the qubit 
+state and flips it. So the transformation is given by 
+
+$$
+X |0 \rangle = \begin{bmatrix} 0 & 1 \\ 1 & 0 \\ \end{bmatrix} |0 \rangle = |1 \rangle. 
+$$
+
+This is a perfect explanation for what is happening algorithmically, however, it is easy for beginners to confuse actual quantum 
+gates with matrices. On real hardware a transformation applied to a qubit by injecting a very specific amount of energy into the 
+qubit (such as a photon or electron) which is extremely difficult to do for systems with more than 
+one particle. This is why many quantum computing software packages, like qiskit \colorbox{lightgray}{Statevector}, have support for 
+qubit simulation. In \colorbox{lightgray}{Statevector} the qubits are manipulated using pauli matrices through 
+matrix multiplication. Then by changing our dependence to real hardware like \colorbox{lightgray}{ibm\_boston} those 
+same matrices are compiled and translated into machine instructions. 
+
+These instructions are described by the time-dependent schrodinger equation. It is not necessary to understand what it does. 
+But notice that there is a dependence on time, and that this equation describes how a quantum state evolves using the 
+transformation Hamiltonian $H$ 
+
+$$
+i \hbar \frac{d}{d t}|\Psi(t)\rangle=H|\Psi(t)\rangle.
+$$
+
+When this equation is solved it has the form
+
+$$
+|\Psi(t)\rangle=e^{-i H t}|\Psi(0)\rangle.
+$$
+
+This is telling us that any quantum state evolves by taking an initial state and act on it by applying the transformation 
+through $e^{-i H t}$ we will get a final state. Now using a similar form we can describe any unitary matrix as an 
+imaginary exponential of a Hermitian matrix $H$ 
+
+$$
+U = e^{-i H}.
+$$
+
+Note that we no longer have dependence on time. Any quantum circuit is built by sequentially applying gates to a qubit
+register. Because we know gates are just unitary matrices, a quantum circuit is just the product of these unitary gates 
+
+$$
+\text{QC} = \prod_{l=1}^{L} U_l
+$$
+
+where $l$ is the number of layers. 
+
+\section{The variational principle}
+The variational principle will help us understand why VQAs work. In nature, quantum states are described by the schrodinger 
+equation. And the variational principle seeks out only stationary states. A stationary state is an energy eigenstate where 
+the energy remains constant. Now take, for example, a single particle in a stationary state. 
+Its energy is described by the time-independent form of the schrodinger equation, like so 
+
+$$
+\hat{H}|\psi\rangle=E|\psi\rangle.
+$$
+
+This is also called the eigenvalue equation in linear algebra. We can find the energy of a specific eigenstate 
+by applying the Hamiltonian $H$
+
+$$
+\hat{H}|\psi_{\lambda}\rangle=\lambda|\psi_{\lambda}\rangle.
+$$
+
+ We might be 
+interested in the lowest energy state (the ground state) denoted by 
+
+$$
+\hat{H}|\psi_0\rangle = E_0|\psi_0 \rangle.
+$$
+
+Once we have the ground state we can determine lots of useful things about our system like its physical or chemical properties.
+However, the ground state is not limited to nature and can be reformulated to represent the solution of problems in 
+optimization, economics, or PDE solving. We can extract the solution by multiplying the left side with $\langle \psi |$. 
+This is the formula for an expectation value of $H$ with respect to $|\psi_0\rangle$. It represents the 
+expected value of the ground state energy.   
+
+$$
+\langle \psi_0|\hat{H}|\psi_0\rangle = E_0
+$$
+
+However, we usually don't know what the specific eigenstates $|\psi_{\lambda}\rangle$ the particle can take on. Because 
+the ground state has the absolute lowest energy eigenvalue we know any arbitrary state must have an energy that is 
+larger than the ground state. 
+
+$$
+\langle \psi | \hat{H} | \psi \rangle \geq E_0
+$$
+
+This equation is called the variational principle. It says that the expectation value of a Hamiltonian must be larger than
+or equal to the ground state energy. We have a system that can take on a whole space of states, we are looking for a specific eigenstate 
+within this space to find its eigenvalue. Now we just need to shuffle through the whole space of potential eigenstates right? 
+For large system this can be like finding a needle in a haystack. Instead, we need a tool that will help us quickly explore the 
+space of good eigenstates which bring us close to the ground state. And that does not waste any time trying out poor solutions 
+that don't bring us close to the ground state. This is where the PQC comes in handy.  
+
+
+\section{The heart of the VQLS: the parameterized quantum circuit}
+A PQC is the same as a quantum circuit except it has parameters 
+
+$$ 
+\text{PQC} = \prod_{l=1}^{L} U_l(\theta).
+$$
+
+How we define or select these parameters will determine how the PQC explores potential eigenstates. Let's say that our particle 
+from earlier only has real eigenstates. We know that a quantum state lives in complex space. So it would be efficient to 
+limit that space to only have real values which our solution is also restricted to. Think of this space as a sphere with 
+a robot arm attached in the middle. The robot arm can only reach segments of the spheres surface based on what 
+gears we give it. Each gear is like a degree of freedom allowing the robot arm to cover more area along the sphere. If we give
+the robot arm a gear for an arbitray axis then it could reach all points along that axis. 
+
+\begin{center}
+    \includegraphics[width=0.45\textwidth]{VQLSpsn_diagrams/robot_arm.png}
+\end{center}
+
+We can give that freedom to our PQC by applying the Pauli matrices from earlier. They will act as our gears. To achieve similar
+rotation that the robot arm above does we can use the Pauli y matrix from earlier to formulate a quantum gate given by
+
+$$
+R_y(\theta)=e^{-i \frac{\theta}{2} Y}.
+$$
+
+Using this form we can construct a simple one qubit PQC 
+
+$$
+e^{-i\frac{\theta}{2} Y}|0\rangle = |\psi \rangle.
+$$
+
+We can use the other Pauli matrices to add new potential eigenstates to $|\psi\rangle$ giving our circuit more expressivity.  
 
 \chapter{Building a VQLS}
+
+Now that we have the motivation and the tool to solve the problem, we can begin building our VQLS. In the following sections
+I break down the four components of a VQLS. There are so many ways to build a VQLS. I have only detailed these sections for 
+the application of VQLS for the Poisson problem. This is especially obvious for the first section about encoding the operators. 
+There are plenty of books out there purposed for how to discretize PDEs so if you are interested in equations other than the 
+Poisson then you will have to apply those texts here. In the rest of the sections they are generalizable to other problems 
+you will just have to find the application yourself. 
+
+I have also built this clickable diagram on the cover of the book which outlines the VQLS algorithm in a visual manner. You
+can click each of the four main components of the diagram to bring you to the relevant chapter. For example, 
+clicking the blue ansatz box with bring you to the ansatz section. Once there you can click the ansatz diagram to 
+bring you back to the cover of the document. The diagram corresponds with the material in the following chapters and 
+I hope after finishing this document you can use the diagram to see how each of the components fit together. 
+
+
 \section{Constructing the operators}
-\section{Choosing an ansatz ansatz}
+\hypertarget{sec:pde}{}
+\begin{center}
+  \hyperlink{maindiagram}{
+    \includegraphics[width=0.65\textwidth]{VQLSpsn_diagrams/pde_diagram_VQLS.png}
+  }\par
+\end{center}
+
+In my project \colorbox{lightgray}{VQLSpsn} I am solving the 2D Poisson equation. So our goal for this section is to 
+construct a Pauli string $\tilde{A}$ which represents the derivative information from our system of equations. I am going to 
+first construct a 1D laplacian and decompose into Pauli matrices and then build the 2D laplacian with the 1D laplacian terms. 
+This way the number of Pauli strings we end up evaluating is less than if we directly decomposed the 2D laplacian. You will 
+see that this means we require less expectation values to complete a training loop. The 1D Poisson laplacian with zero dirichlet
+boundary conditions for $N$ qubits is $-2$ along the diagonal and $1$ along the off diagonal terms. For $N=1$ per dimension
+we have two points along each axis so the grid spacing is given by $1/2$ and the 1D laplacian is given by 
+
+$$
+L_{1D}=\frac{1}{h^2}\cdot \left[\begin{array}{cc}
+-2 & 1 \\
+1 & -2
+\end{array}\right]
+=\left[\begin{array}{cc}
+-8 & 4 \\
+4 & -8
+\end{array}\right].
+$$
+
+We can decompose this matrix into a linear combination of Pauli matrices. The coefficients are computed using the equation
+$\frac{1}{2}Tr[L_{1D} * P]$ where $P$ is a Pauli matrix. We end up getting 
+
+$$
+L_{1D}=-8 I+4 X.
+$$
+
+The 2D laplacian is given by the equation
+
+$$
+A=\left(L_{1D} \otimes I\right)+\left(I \otimes L_{1D}\right).
+$$
+
+Then if we multiply out the coefficients and write $A$ as a linear combination of Pauli matrices we get 
+
+$$
+\tilde{A}=-16(I I)+4(I X)+4(X I).
+$$
+
+This is the final form of our $A$ operator. So you see from the diagram that the final output from this step of the algorithm
+is the sum of Pauli operators and their coefficients in $\tilde{A}$ as well as the vector $b$. 
+
+
+\section{Choosing an ansatz}
+\hypertarget{sec:ansatz}{}
+\begin{center}
+  \hyperlink{maindiagram}{
+    \includegraphics[width=0.75\textwidth]{VQLSpsn_diagrams/ansatz_diagram_VQLS.png}
+  }\par
+\end{center}
+
+If you remember from earlier, an ansatz is just a PQC that also has unparameterized gates. Ansatz prepares a 
+quantum state which depends on parameters $\theta$. When we first begin training our VQLS the final state produce results 
+that don't align with our solution. However, after many iterations, a properly built VQLS will converge to 
+a quantum state which represents an approximation to our solution. This process is guided by the cost function. 
+The ansatz takes in initial qubits states $\rho_n$ as well as the parameters from the rotation gates and outputs 
+a final quantum state $|x(\theta)\rangle.$ 
+
+$$ 
+|x(\theta)\rangle=U(\theta)|0\rangle.
+$$
+
+Here $U(\theta)$ is the ansatz being applied to the zero state. The ansatz is defined by 
+
+$$
+U_l\left(\theta_l\right)=\prod_m e^{-i \theta_m H_m} W_m.
+$$
+
+where $W_m$ is the unparameterized unitary and $H_m$ is the Hermitian operator. In qiskit the ansatz 
+\colorbox{lightgray}{real\_amplitudes} has the form 
+
+$$
+U_{RA}(\theta)=\prod_m e^{-i \frac{\theta_m}{2} Y_m} \text{CNOT}_m.
+$$
+
+where the Hermitian matrix is just the Pauli y matrix and the unparameterized unitary is the CNOT gate. If you 
+are unfamiliar with the CNOT gate I would read through qiskit's documentation. When \colorbox{lightgray}{real\_amplitudes} 
+is called for two qubits 0 and 1 
+
+$$
+U_{RA}(\theta)=\left(\text{CNOT}_{0,1}\right) \cdot\left(e^{-i \frac{\theta_1}{2} Y_1}\right) \cdot\left(e^{-i \frac{\theta_2}{2} Y_2}\right).
+$$
+
+Because the solution vector for our problem only has real values I have chosen this to be my ansatz. That way I know my circuit
+has enough expressivity but not too much that we are wasting computational resources. If we use Penrose graphical notation 
+to visualize this circuit it would have two rotation y gates and one CNOT gate. 
+
+
+
 \section{Building the cost function}
+\hypertarget{sec:cost}{}
+\begin{center}
+  \hyperlink{maindiagram}{
+    \includegraphics[width=0.75\textwidth]{VQLSpsn_diagrams/cost_diagram_VQLS.png}
+  }\par
+\end{center}
+
 \section{Choosing an optimizer}
+\hypertarget{sec:optimizer}{}
+\begin{center}
+  \hyperlink{maindiagram}{
+    \includegraphics[width=0.75\textwidth]{VQLSpsn_diagrams/optimizer_diagram_VQLS.png}
+  }\par
+\end{center}
 
 \chapter{The readout problem to be continued}
 

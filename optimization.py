@@ -19,6 +19,6 @@ def optimize(cost_func, initial_theta, method_str, iterations):
     print(f"Final training energy: {res.fun}")
 
     theta = res.x
-    energy = res.fun
+    cost = res.fun
 
-    return theta, energy
+    return theta, cost
