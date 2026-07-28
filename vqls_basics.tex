@@ -10,6 +10,8 @@
 \usepackage{parskip}
 \usepackage[T1]{fontenc}
 \usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{bbm}
 
 \begin{document}
 
@@ -56,55 +58,57 @@
 
 \chapter{Introduction}
 
-This document covers variational quantum linear system (VQLS) algorithms where the goal 
-is to take a sparse matrix $A$ and a vector $\mathbf{b}$, and prepare a quantum 
+This document covers variational quantum linear solvers (VQLS) where the goal 
+is to take a sparse matrix $A$ and a vector b, and prepare a quantum 
 state $|x\rangle$ that is proportional to $A^{-1}|b\rangle$.
 
-I hope the reader is familiar with undergraduate linear algebra, systems of 
-equations, dirac notation, expectation values, and normalization. Even so, 
-I would encourage the inexperienced reader to dive into the document. I have 
-provided lots of diagrams, equations, and graphs to help aid the learning process. 
+I hope the reader is familiar with undergraduate linear algebra, differential equations, 
+and dirac notation. Even so, I would encourage the inexperienced reader to dive 
+into the document. I have provided lots of diagrams, equations, and graphs to help aid the learning process. 
 
 Note if your goal is to see a "quantum advantage" by solving the Poisson 
 problem using a VQLS then this project is not for you. In the end, this project 
 amounts classically to a small to medium sized matrix multiplication which 
 can be handled by your smart phone in a matter of milliseconds to seconds. 
 A true advantage may be proposed for quantum systems or large system sizes in which a classical 
-computer cannot handle naturally. However, I am interested in solving PDEs 
+high performance computer cannot handle. However, I am interested in solving PDEs 
 right now on noisy quantum hardware. So my research is more concerned with 
-improving the scalability and runtime issues of VQLS. 
+improving the scalability and runtime issues of VQLS on feasible system sizes. 
 
 This document was heavily inspired by "Introduction to Variational Quantum 
 Algorithms" by Michał Stęchły and "Variational quantum algorithms" by Marco Cerezo et al. 
-Michał Stęchły provides an easily digestible non-mathematical introduction to VQA's which 
-can give a great base for those coming from non-physics backgrounds. Cerezo's paper 
-is one of the original publications on VQA's and provides a comphrehensive overview on the algorithms
+Michał Stęchły provides an easily digestible introduction to VQA's which 
+can give a great base for those coming from non-technical backgrounds. Cerezo's paper 
+on VQA's and provides a comphrehensive overview on the class of algorithms
 and their variations. This document is not a replacement for those two papers but rather a supplement to them 
-for those specifically interested in solving PDEs with VQLS. I delve much further into each 
+for those specifically interested in solving PDEs with VQLS. I spend more time on each 
 component of the algorithm introducing both the concept and the application. 
-\chapter{What are variational quantum linear solvers?}
+\chapter{Variational quantum linear solvers}
 
 The VQLS is a hybrid quantum-classical algorithm that uses a parameterized quantum circuit (PQC)
 to iteratively prepare a quantum state $|x\rangle$ that is proportional to $A^{-1}|b\rangle$. 
-To break that down a little bit, VQLS uses both a quantum processing unit (QPU) and a CPU. It also depends on the 
-primitive PQC which for now we can think of as a series of unitary gates of which some depend on 
+VQLS uses both a quantum processing unit (QPU) and a CPU. It also depends on the 
+primitive PQC which is a series of unitary gates where at least some of the gates depend on 
 parameters $\theta$. To find a solution we apply a PQC to a set of quantum states which prepares a guess for $|x\rangle$.
-We check how much the guess overlaps with the solution and then update the parameters to make a better guess. You can 
-think of VQLS as a quantum analog to classical machine-learning methods like neural networks. That will become 
-more apparent as we go through the document. If this was confusing that is ok. In the following sections I break down
-the definitions and context of each of these concepts. You can refer back to this definition as you read along. 
+We apply the laplacian against the guess which returns an approximation to the driving function. Then we check how much this approximation
+overlaps with the original driving function and then update the parameters to make a better guess. You can 
+think of VQLS as a quantum analog to classical machine-learning methods like neural networks. This is a good analogy because the 
+PQC is like an interconnected network with nodes and also has a training loop which uses an optimizer. If this was confusing 
+that is ok. In the following sections I break down the definitions and context of each of these concepts. You can 
+refer back to this definition as you read along. 
 \section{Variational quantum algorithms}
 
-VQLS is a type of variational quantum algorithm (VQA) which are an excellent class of algorithms designed to solve problems
+VQLS is a type of variational quantum algorithm (VQA) which are a class of algorithms designed to solve problems
 on noisy intermediate scale quantum (NISQ) devices. VQAs account for the major limitations of NISQ poor 
-coherence times and gate errors by utilizing an optimization or learning based approach. They also have a PQC and optimizer 
-but are not limited to solving linear systems of equations. 
+coherence times and gate errors by utilizing a learning based approach. Like VQAs they also have 
+a PQC and optimizer but are not limited to solving linear systems of equations. 
 
-VQAs can be used for a wide variety of problems including optimization, machine learning, and most notibly quantum chemistry. 
-Of course, whether VQAs can actually provide good solutions to problems on quantum hardware is still an open question. 
-The more we research the more we learn about the specific limitations of each application. We are also finding 
-that VQAs are not very capable of solving problems on NISQ devices right now but still have potential to be improved. For example,
-creating ansatz which are problem specific, optimizers which are robust to noise, and cost functions which are less susceptible
+VQAs can be used for a wide variety of problems including optimization, PDEs, and quantum chemistry. 
+Of course, whether VQAs can actually provide good solutions to problems on quantum hardware is still an open question. I am 
+investigating whether they can be used to efficiently solve linear systems of equations. The more we research the more we 
+learn about the specific limitations of each application. We are also finding that VQAs are not very capable of 
+solving problems on NISQ devices right now but still have potential to be improved. For example, creating ansatz 
+which are problem specific, optimizers which are robust to noise, and cost functions which are less susceptible
 to barren plateaus are all active areas of research. 
 
 All of the accessible quantum hardware to date is noisy and has a limited qubit coherence time and we refer to 
@@ -113,27 +117,27 @@ of about 0.1\% to 1\%. This means that if we apply a series of gates to a qubit,
 will lose its quantum state after only a hundred gates. This limits the depth (number of quantum gates applied) of quantum 
 circuits that can be executed on NISQ devices.
 
-So we need an algorithm that can work with shallow circuits. The best known quantum algorithms for solving linear systems 
+An algorithm that can work with shallow circuits is necessary. The best known quantum algorithms for solving linear systems 
 are the HHL and QSVT algorithms which use the primitives quantum phase estimation (QPE) and quantum singular value transformation
 (QSVT) respectively. Both of these primitives require deep circuits and are not suitable for NISQ devices which is why
 I have not included them in this project. In interest of seeing if we can solve PDEs on quantum devices today using IBM's 
 hardware we will focus on the VQLS algorithm. 
 
-Ok so VQAs are a class of algorithms for NISQ that can solve many problems. But how do they work? How is a VQA constructed? A 
-I want to give a little intuition on how to answer these questions before reall diving in. VQA can be described using four steps. 
+So far we know VQAs are a class of algorithms for NISQ that can solve many problems. But how do they work? How is a VQA constructed? 
+VQAs can be described using four steps. 
 
 \begin{enumerate}
   \item Encode the problem 
-  \item Choose the ansatz
+  \item Choose the ansatz (a kind of PQC)
   \item Build the cost function
   \item Run the optimization loop
 \end{enumerate}
 
 The final step which is hidden is to readout the solution. However, this can be a very difficult step and is not always possible. I will 
 discuss general readout methods and their limitations in the last chapter. Encoding the problem is the first step and is
-when we take our classical problem and encode it into a quantum problem. In a quantum chemistry problem we would 
+when we take our classical problem and encode it into a quantum problem. In quantum chemistry problems we 
 encode the Hamiltonian of a molecule into a quantum circuit. In the case of a PDE we can encode a matrix $A$ and vector $b$ 
-containing the discretized PDE into a quantum circuit. 
+containing the discretized equations into a quantum circuit. 
 
 For example, we can take any general classical problem represented by the 2x2 matrix 
 
@@ -168,7 +172,7 @@ and the ansatz section I discuss exactly how the ansatz prepares a guess solutio
 
 After choosing our ansatz we need define our cost function. The cost function takes in our encoded matrix as well as the ansatz. 
 We define a cost function like in classical machine learning methods to be the discrepancy between our guessed state and our
-target state. The final output of the cost function is a real number between 0 and 1. The core goal of the VQA is to minimize this cost 
+target state. The final output of the cost function is a real number between zero and one. The core goal of the VQA is to minimize this cost 
 through optimization. The final step is to choose an optimizer type like gradient descenent. 
 
 
@@ -183,7 +187,7 @@ $$
 $$
 
 So now our quantum state which is a vector can be formed with any linear combination of possible states and their corresponding 
-comlex coefficients. As long as the sum of coefficients squared magnitudes is equal to exactly one. This forms a vector space or more specifically 
+complex coefficients. As long as the sum of coefficients squared magnitudes is equal to exactly one. This forms a vector space or more specifically 
 an inner product space commonly referred to as the Hilbert space. Therefore, you can mathematically encode $2^n$ classical data points 
 into the coefficients of a single $n$-qubit quantum state. Confirm that this makes sense for yourself. 
 
@@ -193,7 +197,7 @@ product (the length) of the state vector. This ensures the total probability of 
 A transformation is unitary if its conjugate transpose times itself returns the identity matrix 
 
 $$
-U^{\dagger} U = I
+U^{\dagger} U = I.
 $$
 
 So a quantum gate can be mathematically represented as a unitary transformation matrix. Let's take the example of an $X$ gate
@@ -293,7 +297,7 @@ space of good eigenstates which bring us close to the ground state. And that doe
 that don't bring us close to the ground state. This is where the PQC comes in handy.  
 
 
-\section{The heart of the VQLS: the parameterized quantum circuit}
+\section{The heart of the VQLS: The parameterized quantum circuit}
 A PQC is the same as a quantum circuit except it has parameters 
 
 $$ 
@@ -389,7 +393,14 @@ $$
 $$
 
 This is the final form of our $A$ operator. So you see from the diagram that the final output from this step of the algorithm
-is the sum of Pauli operators and their coefficients in $\tilde{A}$ as well as the vector $b$. 
+is the sum of Pauli operators and their coefficients in $\tilde{A}$ as well as the vector $b$. We can write this as a sum
+for each term $k$ 
+
+$$
+\tilde{A}=\sum_k c_k P_k
+$$
+
+where the weight of each term is given by $c_k$ and the Pauli matrix by $P_k$. 
 
 
 \section{Choosing an ansatz}
@@ -426,16 +437,36 @@ $$
 
 where the Hermitian matrix is just the Pauli y matrix and the unparameterized unitary is the CNOT gate. If you 
 are unfamiliar with the CNOT gate I would read through qiskit's documentation. When \colorbox{lightgray}{real\_amplitudes} 
-is called for two qubits 0 and 1 
+is called for two qubits 0 and 1 for one layer
 
 $$
 U_{RA}(\theta)=\left(\text{CNOT}_{0,1}\right) \cdot\left(e^{-i \frac{\theta_1}{2} Y_1}\right) \cdot\left(e^{-i \frac{\theta_2}{2} Y_2}\right).
 $$
 
 Because the solution vector for our problem only has real values I have chosen this to be my ansatz. That way I know my circuit
-has enough expressivity but not too much that we are wasting computational resources. If we use Penrose graphical notation 
-to visualize this circuit it would have two rotation y gates and one CNOT gate. 
+has enough expressivity but not too much that we are wasting computational resources. For $N_{total} = 2$ and 
+depth$=2$ if we use Penrose graphical notation to visualize \colorbox{lightgray}{real\_amplitudes} it would have four parameters total.
 
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{VQLSpsn_diagrams/real_amp_VQLS.png}
+\end{center}
+
+The total number of states in our system for $N_{\text {total }}=2$ is $2^N=4$ so we will have 4 coefficients in the 
+final quantum state vector. The sum of squared amplitudes must equal one for quantum states. This removes one 
+degree of freedom, and thus a 2 qubit system can be described with 3 independent parameters.
+
+I want to add one final note to this section which may have not been obvious so far about VQLS. In the beginning of Ch.2
+I defined the algorithm as preparing a quantum state $|x\rangle$ iteratively. Iteratively refers to the parameters inside of 
+the ansatz being updated by the optimizer during each training loop. So the final solution is not just a quantum state of 
+the actual solution $x$. The final solution is a quantum state which depends on parameters $\theta$ which are optimized 
+during the training loop. I will denote the trained parameters as $\theta_{\text{opt}}$. The final solution is given by 
+
+$$
+U(\theta_{\text{opt}})|0\rangle = |x(\theta_{\text{opt}})\rangle. 
+$$
+
+This means after completing the training loop we obtain the optimal parameters $\theta_{\text{opt}}$, which we plug into 
+the ansatz, and apply again against a set of initialized qubits. 
 
 
 \section{Building the cost function}
@@ -446,6 +477,134 @@ to visualize this circuit it would have two rotation y gates and one CNOT gate.
   }\par
 \end{center}
 
+Recall the variational principle. The expectation value of an eigenstate forms an upper bound for the ground state energy. Now
+instead of measuring the energy of the system we are measuring the overlap between our approximation and the original driving function. 
+Really it can be said that we are measuring the overlap between our approximation and the solution vector. But this can be quite 
+confusing if you then assume that we just have the solution vector from the start. We don't. In order to measure the overlap of the 
+driving function, we make an approximation $|x(\theta)\rangle$, apply the laplacian to get a guess for the driving 
+function $\tilde{A}|x(\theta)\rangle = |b_{\theta}\rangle$, and then measure the overlap between this guess and the original driving function $b$.
+The overlap is given by 
+
+$$
+|\langle b_{\theta} | b \rangle|^2 = \langle b_{\theta} | b \rangle \langle b | b_{\theta} \rangle.
+$$
+
+This returns a real value between zero and one. When the vectors are overlapping the expression returns a value of one. When
+the vectors are orthogonal to eachother they return zero. It is standard to reverse this order and instead 
+return zero when they are perfectly overlapping. We do this by subtracting the result from the identity matrix like so,
+
+$$
+\langle b_{\theta}|(\mathbbm{1}-|b\rangle\langle b|)|b_{\theta}\rangle.
+$$
+
+We can expand the $b_{\theta}$ terms and group the inner product of $b$ into an operator $\mathbf{O}$ and we get,  
+
+$$
+\langle x(\theta) | \tilde{A}^{\dagger} \mathbf{O} A | x(\theta) \rangle. 
+$$ 
+
+When $\tilde{A}$ is applied to $|x(\theta)\rangle$ the quantum hardware takes only the Pauli term $P_k$ into account. Each qubit's
+measurement basis is changed to match the corrresponding $P_k$ term. The expectation value is taken with that Pauli term and then 
+scaled by weight $c_k$ which stretches the vector. Finally, all of these values are summed. This stretch can cause a couple of
+issues with the scaling of our final result. So we must normalize the the above equation in order to make a proper 
+cost function. If we define the cost without normalizing the optimizer could do two things with the vector,
+
+\begin{itemize}
+  \item[1.] change the direction of $|b_{\theta}\rangle$ so it aligns with $|b\rangle$ (the correct way).
+  \item[2.] Shrink the length of $|b_{\theta}\rangle$ so the result also shrinks to zero (the wrong way).
+\end{itemize}
+
+So we must normalize the cost function by dividing by the square length of guess $|b_{\theta}\rangle$
+
+$$
+C(\theta)=\frac{\langle b_{\theta}|(\mathbbm{1}-|b\rangle\langle b|)| b_{\theta}\rangle}
+{\langle b_{\theta} \mid b_{\theta}\rangle}
+$$
+
+Majority of the time we initialize the qubits of the ansatz circuit into the $|0\rangle$ state. We can expand the cost function
+again into
+
+$$
+C(\theta)=\frac{\langle 0|U^{\dagger}(\theta) \tilde{A}^{\dagger}|(\mathbbm{1}-|b\rangle\langle b|)| \tilde{A} U(\theta) |0\rangle}
+{\langle 0| U^{\dagger}(\theta) \tilde{A}^{\dagger} \mid \tilde{A} U(\theta) |0 \rangle}.
+$$
+
+Now the cost function is the normalized expectation value of a pre-defined operator with respect to $|b_{\theta}\rangle$
+
+$$
+\mathbf{O}_G = \mathbbm{1} - P_b
+$$
+
+where $P_b$ is called the "global" projection matrix. When we use $\mathbf{O}_G$ we are computing the global cost function. 
+It works, but for systems with more qubits it often suffers from barren platues when the cost landscape 
+is too flat for the optimizer to navigate. The local operator $O_L$ was introduced to fix this issue. 
+Instead of checking if the entire state $|b_{\theta}\rangle$ matches $|b\rangle$ we check one qubit at a time 
+and average the score.
+
+$$
+O_L=\mathbbm{1}-\frac{1}{N} \sum_{q=1}^N U_b\left(|0\rangle\left\langle\left. 0\right|_q \otimes \mathbbm{1}_{\bar{q}}\right) U_b^{\dagger}\right.
+$$
+
+$N$ is the total number of qubits $q$ and $U_b$ is a unitary Matrix which creates $|b\rangle$ out of the all-zero state
+
+$$
+U_b|0\rangle^{\otimes n}=|b\rangle
+$$
+
+So when $|b\rangle=|0\rangle$ we know $U_b=\mathbbm{1}$. The term $\mathbbm{1}_{\bar{q}}$ is the tensor product of 
+$2 \times 2$ identity matrices applied to every qubit except the $q^{\text{th}}$ qubit. For $q=2$ and $U_b=\mathbbm{1}$
+
+$$
+\begin{aligned}
+& O_L=\mathbbm{1}-\frac{1}{2}\left(U_{b}\left(|0\rangle\left\langle\left. 0\right|_1 \otimes \mathbbm{1}_{\overline{1}}\right) U_b^{\dagger}+U_b\left(|0\rangle\left\langle\left. 0\right|_2 \otimes \mathbbm{1}_{\overline{2}}\right) U_b^{\dagger}\right)\right.\right. \\
+& O_L=\mathbbm{1}-\frac{1}{2}\left(U_b(|0\rangle\langle 0| \otimes \mathbbm{1}) U_b^{\dagger}+U_b(\mathbbm{1} \otimes|0\rangle\langle 0|) U_b^{\dagger}\right) \\
+& O_L=\mathbbm{1}-\frac{1}{2}\left(U_b\left(\begin{array}{llll}
+1 & 0 & 0 & 0 \\
+0 & 1 & 0 & 0 \\
+0 & 0 & 0 & 0 \\
+0 & 0 & 0 & 0
+\end{array}\right) U_b^{\dagger}+U_b\left(\begin{array}{llll}
+1 & 0 & 0 & 0 \\
+0 & 0 & 0 & 0 \\
+0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 0
+\end{array}\right) U_b^{\dagger}\right) \\
+& O_L=\mathbbm{1}-\frac{1}{2}\left(\begin{array}{llll}
+2 & 0 & 0 & 0 \\
+0 & 1 & 0 & 0 \\
+0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 0 \\
+\end{array}\right)=\mathbbm{1}-\left(\begin{array}{llll}
+1 & 0 & 0 & 0 \\
+0 & 0.5 & 0 & 0 \\
+0 & 0 & 0.5 & 0 \\
+0 & 0 & 0 & 0
+\end{array}\right)
+\end{aligned}
+$$
+
+for $O_G$ with $q=2$ and $U_b=\mathbbm{1}$
+
+$$
+\begin{gathered}
+O_G=\mathbbm{1}-P_G \\
+=\mathbbm{1}-|b\rangle\langle b| \\
+O_G=\mathbbm{1}-\left(\begin{array}{llll}
+1 & 0 & 0 & 0 \\
+0 & 0 & 0 & 0 \\
+0 & 0 & 0 & 0 \\
+0 & 0 & 0 & 0
+\end{array}\right)
+\end{gathered}
+$$
+
+The math is very clear but still understanding how using the local operator makes a difference can be hard to see. 
+The glopal operator asks: "Does the entire $N$ state qubit perfectly match the state $|b\rangle$?" So 
+if we have the state $|100001\rangle$ but need $|00000\rangle$, the global operator treats it as all or nothing 
+and the cost landscape will remain unchanged. Unless you happen to randomly initialize your parameters $\theta$ 
+incredibly close to the perfect answer, the cost function will return a value extremely close to one.
+
+
 \section{Choosing an optimizer}
 \hypertarget{sec:optimizer}{}
 \begin{center}
@@ -454,6 +613,55 @@ to visualize this circuit it would have two rotation y gates and one CNOT gate.
   }\par
 \end{center}
 
+The optimizer controls how the parameters inside the ansatz in the cost function are updated during each training loop. It's 
+goal is to minimize the value of the cost function over a pre-defined number of iterations.
+
+$$
+\arg \min _\theta C(\theta).
+$$
+
+There are many pre existing packages for optimizers in both qiskit and in scipy. Throughout my research I have mostly used 
+scipy optimizers like \colorbox{lightgray}{COBYLA} which is a non-gradient descent technique. There are also quantum hardware specific 
+optimizers in qiskit like \colorbox{lightgray}{SPSA}. Most likely you will test a few optimizers from these packages for your
+project and compare the performance. To give intuition on how optimizers that use gradient descent make improvements take for 
+example the global cost function which suffers from barren plateaus. The gradient is the derivative of the cost function with 
+respect to your parameters. Because the variations in cost are small, the derivative evaluates to zero. A general rule for a 
+gradient based optimizer is
+
+$$
+\theta_{\text {new }}=\theta_{\text {old }}-(\text { learning rate } \cdot \text { gradient }).
+$$
+
+So because the gradient is so close to zero the new parameters will only be slightly tweaked.
+
 \chapter{The readout problem to be continued}
+
+The final output of the quantum circuit is a quantum state. The process of extracting the solution from the quantum state 
+is referred to as the readout problem. If you want to solve a complex differential equation (like modeling airflow over a 
+wing or fluid moving through a pipe), you usually have to calculate the answer over a massive "grid" of thousands or 
+millions of tiny points to get an accurate result. Because of quantum superposition, a quantum computer can use just 
+$n$ qubits to represent $2^n$ data points simultaneously. For example, just 30 qubits can represent over a billion data 
+points at the exact same time. On a regular computer, once you calculate that billion-point grid, you just open your 
+hard drive, look at the memory, and read the answers.
+
+A quantum computer does not let you do that. All those billion points are locked inside a fragile, unreadable quantum 
+state. If you want to know the exact solution for the whole grid, you may use a process of running the exact same circuit 
+millions of times and measuring it from every possible angle to slowly reconstruct the answer (a kind of tomography 
+technique). Because the grid is so massive, this becomes impossibly complex and time-consuming. The time you save 
+calculating the answer is completely wasted trying to read the answer.
+
+ML methods were developed to take the quantum state solution and feed it through a quantum neural network (QNN) to 
+reduce the solution size before measurement. This way we can drastically simply our result before measuring thereby 
+reducing the cost of extraction. The methods are described in detail here: https://arxiv.org/html/2411.14259v1 but 
+I will give a short description. 
+
+Quantum Neural Network (QNN) is simply a series of new quantum gates appended directly to the end of your specific 
+quantum algorithm circuit. The quantum state flows seamlessly from your solver directly into the QNN circuit 
+$U(\boldsymbol{\theta})|\rho\rangle$ without ever being measured or turned into classical data.
+
+The QNN systematically reduces the complexity of the state by concentrating the solution into a smaller subset of qubits. 
+When the quantum state emerges from the end of the QNN, it is still a quantum state. However, its structure has been 
+radically altered. Instead of the information being spread across an entangled $8$-qubit or $12$-qubit register, 
+it is reduced to a 1 or 2-qubit register while the rest can be ignored. Now with this simple system we make a measurement.
 
 \end{document}
